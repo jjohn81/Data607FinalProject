@@ -1,0 +1,91 @@
+---
+title: "Data 607 - Final Project"
+author: "Joby John / Peter Kowalchuk"
+date: "11/28/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Loading required libraries
+
+```{r}
+library("rvest")
+library(tidyr)
+require(mongolite)
+library(dplyr )
+
+library(FredR)
+library(pipeR)
+```
+
+##First Dataset
+
+```{r}
+url <- "https://web.education.wisc.edu/nwhillman/index.php/2017/02/01/party-control-in-congress-and-state-legislatures/"
+congress_by_party <- url %>%
+  read_html() %>%
+  html_table()
+# this is wide format . 
+congress_by_party <- congress_by_party[[1]]
+```
+
+```{r}
+# conver to long format. year, party, chamber, seats
+congress_by_party  <- congress_by_party %>% select(1:7)
+
+names(congress_by_party) <- c('year',
+                              paste(congress_by_party[1,2], congress_by_party[2,2]),
+                              paste(congress_by_party[1,3], congress_by_party[2,3]),
+                              paste(congress_by_party[1,4], congress_by_party[2,4]),
+                              paste(congress_by_party[1,5], congress_by_party[2,5]),
+                              paste(congress_by_party[1,6], congress_by_party[2,6]),
+                              paste(congress_by_party[1,7], congress_by_party[2,7])
+                              )
+congress_by_party <- congress_by_party[c(3:22),] %>% 
+  gather(chamber, seat , -year)
+```
+
+
+```{r}
+InsertRecords<- function(data) {
+  data607_final_project <- mongo( db = "DATA607", collection = "DATA607_Final_Project")
+  x <-data607_final_project$insert(data)
+  rm(data607_final_project)
+  gc()
+  x
+}
+
+InsertRecords(congress_by_party)
+```
+
+##Second Dataset
+
+```{r}
+api.key = "4844eb6986119824760163e60bddd945"
+fred<-FredR(api.key)
+```
+
+
+```{r}
+gdp.series <- fred$series.search("GDP")
+
+#Gross domestic product
+gdp <- fred$series.observations(series_id = 'GDPC1')
+#Data is quarterly, needs to be scaled up to anually
+
+#Real Personal Consumption Expenditures
+rpce <- fred$series.observations(series_id = 'DPCERL1Q225SBEA')
+#Data is quarterly, needs to be scaled up to anually
+
+```
+
+
+
+
+
+
+
+
