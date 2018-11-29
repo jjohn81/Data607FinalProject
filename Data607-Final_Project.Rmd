@@ -19,6 +19,7 @@ library(dplyr )
 
 library(FredR)
 library(pipeR)
+library(kableExtra)
 ```
 
 ##First Dataset
@@ -48,6 +49,13 @@ congress_by_party <- congress_by_party[c(3:22),] %>%
   gather(chamber, seat , -year)
 ```
 
+###Final Dataset 1
+
+```{r}
+congress_by_party %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
+```
+
+**Adding dataset to Mongo database**
 
 ```{r}
 InsertRecords<- function(data) {
@@ -82,7 +90,32 @@ rpce <- fred$series.observations(series_id = 'DPCERL1Q225SBEA')
 
 ```
 
+```{r}
+#Scale up data from quarterly to annual
+gdp$date<-substring(gdp$date,1,4)
+gdp$value<-as.numeric(gdp$value)
+gdp$value<-gdp$value/4
+gdp<-gdp %>% group_by(date) %>% summarise(value=sum(value))
 
+rpce$date<-substring(rpce$date,1,4)
+rpce$value<-as.numeric(rpce$value)
+rpce$value<-rpce$value/4
+rpce<-rpce %>% group_by(date) %>% summarise(value=sum(value))
+```
+
+###Final Dataset 2
+
+```{r}
+gdp %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
+rpce %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
+```
+
+**Adding dataset to Mongo database**
+
+```{r}
+InsertRecords(gdp)
+InsertRecords(rpce)
+```
 
 
 
