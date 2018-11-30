@@ -1,0 +1,174 @@
+---
+title: "Data 607 - Final Project"
+author: "Joby John / Peter Kowalchuk"
+date: "11/28/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Loading required libraries
+
+```{r}
+library("rvest")
+library(tidyr)
+require(mongolite)
+library(dplyr)
+library(ggplot2)
+
+library(FredR)
+library(pipeR)
+library(kableExtra)
+```
+
+##First Dataset
+
+```{r}
+url <- "https://web.education.wisc.edu/nwhillman/index.php/2017/02/01/party-control-in-congress-and-state-legislatures/"
+congress_by_party <- url %>%
+  read_html() %>%
+  html_table()
+# this is wide format . 
+congress_by_party <- congress_by_party[[1]]
+```
+
+```{r}
+# conver to long format. year, party, chamber, seats
+congress_by_party1  <- congress_by_party %>% select(1:7)
+ 
+
+ 
+
+names(congress_by_party1) <- c('Year',
+                              paste(congress_by_party1[1,2], congress_by_party1[2,2]),
+                              paste(congress_by_party1[1,3], congress_by_party1[2,3]),
+                              paste(congress_by_party1[1,4], congress_by_party1[2,4]),
+                              paste(congress_by_party1[1,5], congress_by_party1[2,5]),
+                              paste(congress_by_party1[1,6], congress_by_party1[2,6]),
+                              paste(congress_by_party1[1,7], congress_by_party1[2,7])
+                              )
+congress_by_party1 <- congress_by_party1 %>%
+                    mutate(Senate =ifelse(congress_by_party1$`Senate Dem` > congress_by_party1$`Senate Rep`, "Dem", ifelse(congress_by_party1$`Senate Dem` == congress_by_party1$`Senate Rep`, 'Hung','Rep')))
+
+congress_by_party1 <- congress_by_party1 %>%
+                    mutate(House =ifelse(congress_by_party1$`House Dem` > congress_by_party1$`House Rep`, "Dem", ifelse(congress_by_party1$`House Dem` == congress_by_party1$`House Rep`, 'Hung','Rep')))
+
+congress_by_party1<- congress_by_party1 %>%
+                     select(Year, House, Senate)
+congress_by_party1<- congress_by_party1[c(3:22),] %>% arrange(desc(Year))
+
+congress_by_party1$Year <- as.numeric(congress_by_party1$Year)
+ 
+congress_by_party2 <- congress_by_party1
+
+congress_by_party2$Year <-congress_by_party2$Year+1
+
+congress <- rbind(congress_by_party1, congress_by_party2)
+```
+
+###Final Dataset 1
+
+```{r}
+congress_by_party %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
+```
+
+**Adding dataset to Mongo database**
+
+```{r}
+InsertRecords<- function(data) {
+  data607_final_project <- mongo( db = "DATA607", collection = "DATA607_Final_Project")
+  x <-data607_final_project$insert(data)
+  rm(data607_final_project)
+  gc()
+  x
+}
+
+InsertRecords(congress_by_party)
+```
+
+##Second Dataset
+
+```{r}
+api.key = "4844eb6986119824760163e60bddd945"
+fred<-FredR(api.key)
+```
+
+
+```{r}
+gdp.series <- fred$series.search("GDP")
+
+#Gross domestic product
+gdp <- fred$series.observations(series_id = 'GDPC1')
+#Data is quarterly, needs to be scaled up to anually
+
+#Real Personal Consumption Expenditures
+rpce <- fred$series.observations(series_id = 'DPCERL1Q225SBEA')
+#Data is quarterly, needs to be scaled up to anually
+
+```
+
+```{r}
+#Scale up data from quarterly to annual
+gdp$date<-substring(gdp$date,1,4)
+gdp$value<-as.numeric(gdp$value)
+gdp$value<-gdp$value/4
+gdp<-gdp %>% group_by(date) %>% summarise(value=sum(value))
+
+rpce$date<-substring(rpce$date,1,4)
+rpce$value<-as.numeric(rpce$value)
+rpce$value<-rpce$value/4
+rpce<-rpce %>% group_by(date) %>% summarise(value=sum(value))
+```
+
+###Final Dataset 2
+
+```{r}
+gdp %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
+rpce %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
+```
+
+**Adding dataset to Mongo database**
+
+```{r}
+InsertRecords(gdp)
+InsertRecords(rpce)
+```
+
+####Trends
+```{r}
+gdp1<-rpce
+gdp1$date <- as.numeric(rpce$date) 
+gdp1$value <- as.double(rpce$value)
+
+gdp2 <- gdp1
+gdp3 <- gdp1
+ gdp1 <- gdp1%>%inner_join(congress,by =c('date'='Year') )
+ggplot(gdp1, aes(x=date, y=value, shape=House, color=House)) +
+  geom_point()
+
+ggplot(gdp1, aes(x=date, y=value, shape=Senate, color=Senate)) +
+  geom_point() 
+
+
+
+congressx<-gather(congress, key = Congress, value = Party,
+       House,Senate)
+ gdp2 <- gdp2%>%inner_join(congressx,by =c('date'='Year') 
+                           )
+ggplot(gdp2, aes(x=date, y=value, shape= Congress, color=Party)) +
+  geom_point()
+
+
+congressz <- congress %>% mutate(Congress = ifelse(congress$House == congress$Senate, congress$House,'Hung'))
+
+
+ gdp3 <- gdp3%>%inner_join(congressz,by =c('date'='Year') )
+ggplot(gdp3, aes(x=date, y=value,  color=Congress , shape =  Congress )) +
+  geom_point()
+```
+
+
+
+
