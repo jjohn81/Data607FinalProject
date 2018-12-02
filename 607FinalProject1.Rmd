@@ -132,81 +132,78 @@ For our analysis, electoral data is taken into a long table format from its orig
 
 ```{r}
 # conver to long format. year, party, chamber, seats
-congress_by_party1  <- congress_by_party %>% select(1:7)
+congress_by_party  <- congress_by_party %>% select(1:7)
  
-names(congress_by_party1) <- c('Year',
-                              paste(congress_by_party1[1,2], congress_by_party1[2,2]),
-                              paste(congress_by_party1[1,3], congress_by_party1[2,3]),
-                              paste(congress_by_party1[1,4], congress_by_party1[2,4]),
-                              paste(congress_by_party1[1,5], congress_by_party1[2,5]),
-                              paste(congress_by_party1[1,6], congress_by_party1[2,6]),
-                              paste(congress_by_party1[1,7], congress_by_party1[2,7])
+names(congress_by_party) <- c('Year',
+                              paste(congress_by_party[1,2], congress_by_party[2,2]),
+                              paste(congress_by_party[1,3], congress_by_party[2,3]),
+                              paste(congress_by_party[1,4], congress_by_party[2,4]),
+                              paste(congress_by_party[1,5], congress_by_party[2,5]),
+                              paste(congress_by_party[1,6], congress_by_party[2,6]),
+                              paste(congress_by_party[1,7], congress_by_party[2,7])
                               )
-congress_by_party1 <- congress_by_party1 %>%
-                    mutate(Senate =ifelse(congress_by_party1$`Senate Dem` > congress_by_party1$`Senate Rep`, "Dem", ifelse(congress_by_party1$`Senate Dem` == congress_by_party1$`Senate Rep`, 'Hung','Rep')))
+congress_by_party <- congress_by_party %>%
+                    mutate(Senate =ifelse(congress_by_party$`Senate Dem` > congress_by_party$`Senate Rep`, "Dem", ifelse(congress_by_party$`Senate Dem` == congress_by_party$`Senate Rep`, 'Hung','Rep')))
 
-congress_by_party1 <- congress_by_party1 %>%
-                    mutate(House =ifelse(congress_by_party1$`House Dem` > congress_by_party1$`House Rep`, "Dem", ifelse(congress_by_party1$`House Dem` == congress_by_party1$`House Rep`, 'Hung','Rep')))
+congress_by_party <- congress_by_party %>%
+                    mutate(House =ifelse(congress_by_party$`House Dem` > congress_by_party$`House Rep`, "Dem", ifelse(congress_by_party$`House Dem` == congress_by_party$`House Rep`, 'Hung','Rep')))
 
-congress_by_party1<- congress_by_party1 %>%
+congress_by_party<- congress_by_party %>%
                      select(Year, House, Senate)
-congress_by_party1<- congress_by_party1[c(3:22),] %>% arrange(desc(Year))
+congress_by_party<- congress_by_party[c(3:22),] %>% arrange(desc(Year))
 
-congress_by_party1$Year <- as.numeric(congress_by_party1$Year)
+congress_by_party$Year <- as.numeric(congress_by_party$Year)
  
-congress_by_party2 <- congress_by_party1
+# Fill int the data for the year between elections
+congress_by_party_between_years <- congress_by_party
 
-congress_by_party2$Year <-congress_by_party2$Year+1
+congress_by_party_between_years$Year <-congress_by_party_between_years$Year+1
 
-congress <- rbind(congress_by_party1, congress_by_party2)
+congress <- rbind(congress_by_party, congress_by_party_between_years)
 ```
 
 ###Final Electoral Dataset
 
 ```{r}
-colnames(congress_by_party)<-c("Year","Senate_Dem","Senate_Rep","Senate_Oth","House Dem","House Rep","House Oth","State Legislatures Dem","State Legislatures Rep","State Legislatures Split+NE")
-congress_by_party<-congress_by_party[-3,]
-congress_by_party %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
+ 
+congress %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
 ```
 
 **Adding dataset to Mongo database**
 
 ```{r}
-InsertRecords(congress_by_party)
+InsertRecords(congress)
 ```
+
+**Read data from Mongo**
+
+```{r}
+# I will add logic to retrieve data from mongo. This way we are using two data sources. I will read gdp and rpce
+# data back and store them in the same variable. I will alos try to do the join in mongo
+
+# mongoCongress <- mongo( db = "DATA607", collection = "DATA607_Final_Project")
+#congress <- mongoCongress$find('{}')
+```
+
 
 #Visualize
 
 ```{r}
-gdp1<-rpce
-gdp1$date <- as.numeric(rpce$date) 
-gdp1$value <- as.double(rpce$value)
+gdp_congress<-rpce
+gdp_congress$date <- as.numeric(gdp_congress$date) 
+gdp_congress$value <- as.double(gdp_congress$value)
 
-gdp2 <- gdp1
-gdp3 <- gdp1
- gdp1 <- gdp1%>%inner_join(congress,by =c('date'='Year') )
-ggplot(gdp1, aes(x=date, y=value, shape=House, color=House)) +
+ 
+gdp_congress <- gdp_congress%>%inner_join(congress,by =c('date'='Year') )
+ 
+ggplot(gdp_congress, aes(x=date, y=value, shape=House, color=House)) +
   geom_point()
 
-ggplot(gdp1, aes(x=date, y=value, shape=Senate, color=Senate)) +
+ggplot(gdp_congress, aes(x=date, y=value, shape=Senate, color=Senate)) +
   geom_point() 
 
 
 
-congressx<-gather(congress, key = Congress, value = Party,
-       House,Senate)
- gdp2 <- gdp2%>%inner_join(congressx,by =c('date'='Year') 
-                           )
-ggplot(gdp2, aes(x=date, y=value, shape= Congress, color=Party)) +
-  geom_point()
-
-
-congressz <- congress %>% mutate(Congress = ifelse(congress$House == congress$Senate, congress$House,'Hung'))
-
-
- gdp3 <- gdp3%>%inner_join(congressz,by =c('date'='Year') )
-ggplot(gdp3, aes(x=date, y=value,  color=Congress , shape =  Congress )) +
-  geom_point()
 ```
 
 
