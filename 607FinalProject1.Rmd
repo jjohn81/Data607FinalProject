@@ -2,14 +2,36 @@
 title: "Data 607 - Final Project"
 author: "Joby John / Peter Kowalchuk"
 date: "11/28/2018"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-##Loading required libraries
+#Introduction
+
+Every two years our nation goes thru the process of electing out government officials. It seems every year the bipartisan rhetoric gets stronger and strong. Many claims are made on what happens to the economy when either party is in control, of the President’s office, the Senate or the House. Coming right out of the mid-terms, looking at what next year brings economically is certainly of interest to all.
+
+Gathering data from the Federal Reserve’s FRED service ( https://fred.stlouisfed.org ) and from scrapping results from elections from the web (such as https://transition.fec.gov/pubrec/electionresults.shtm), we can build a model of what next year has in store. 
+
+We would start out by selecting economic indicators from the FRED site. Selecting interesting indicators will be done using  Wickham’s  workflow. Data will be imported, made tidy, possible transformations applied and then thru visualization the most “interesting” indicators will be selected.
+
+ Electoral data will include the number of senate and house seats in congress the year after an election. Using this data together with our economic indicators, models will be built to predict a certain economic indicator. Several models can be used, presenting results from each in graphical form. We can also classify monthly economic data with a good, medium and poor economy tag. Once we do this we can train a classifier to tell us what the economic outlook might be given an input of congress seats.
+
+There seems to be the notion that Python is a better language for machine learning and running classifiers. As a stretch got for this project, to experiment with something not covered in class, we can try running python code in RStudio using the reticulate library. If this is possible, training a classifier using the popular sci-kitlearn package in Python and comparing them with results in r, could give us a clue into which is better at machine learning.
+
+#Workflow
+
+We will use Hadley Wickman's Tidy Workflow as show below.
+
+![](TidyWorkflow.png)
+
+###Loading required libraries
 
 ```{r}
 library("rvest")
@@ -23,7 +45,35 @@ library(pipeR)
 library(kableExtra)
 ```
 
-##First Dataset
+#Import Data
+
+##Economic Indicators Dataset
+
+The Federal Reserve's database has a selection of economic indicators. For this analysis we will look at GDP (Gross Domestic Product) indicators as a proxy for the health of the economy. To select an indicator we can first explore GDP indicators available.
+
+```{r}
+api.key = "4844eb6986119824760163e60bddd945"
+fred<-FredR(api.key)
+
+gdp.series <- fred$series.search("GDP")
+gdp.series %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
+```
+
+From this selection we decide to use two indicators: Gross Domestic Product and Real Personal Consumption Expenditures.
+
+```{r}
+#Gross domestic product
+gdp <- fred$series.observations(series_id = 'GDPC1')
+head(gdp,n=100) %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
+
+#Real Personal Consumption Expenditures
+rpce <- fred$series.observations(series_id = 'DPCERL1Q225SBEA')
+head(rpce,n=100) %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
+```
+
+##Electoral Data
+
+For this analysis we will need data showing the number of congress and senate seats occupied by both parties. This data was scrapped from The University of Wisconsin's web page. 
 
 ```{r}
 url <- "https://web.education.wisc.edu/nwhillman/index.php/2017/02/01/party-control-in-congress-and-state-legislatures/"
@@ -32,15 +82,58 @@ congress_by_party <- url %>%
   html_table()
 # this is wide format . 
 congress_by_party <- congress_by_party[[1]]
+head(congress_by_party,n=100) %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
 ```
+
+#Tidy & Transform
+
+##Economic Indicators Dataset
+
+Since our analysis will be annual based, as senate and congress seats change biannually, the economic data gathered from the Federal Reserve site needs to be scaled up from quarterly to annually.
+
+```{r}
+#Scale up data from quarterly to annual
+gdp$date<-substring(gdp$date,1,4)
+gdp$value<-as.numeric(gdp$value)
+gdp$value<-gdp$value/4
+gdp<-gdp %>% group_by(date) %>% summarise(value=sum(value))
+
+rpce$date<-substring(rpce$date,1,4)
+rpce$value<-as.numeric(rpce$value)
+rpce$value<-rpce$value/4
+rpce<-rpce %>% group_by(date) %>% summarise(value=sum(value))
+```
+
+###Final Economic Indicators Dataset 
+
+```{r}
+gdp %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
+rpce %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
+```
+
+**Adding dataset to Mongo database**
+
+```{r}
+InsertRecords<- function(data) {
+  data607_final_project <- mongo( db = "DATA607", collection = "DATA607_Final_Project")
+  x <-data607_final_project$insert(data)
+  rm(data607_final_project)
+  gc()
+  x
+}
+
+InsertRecords(gdp)
+InsertRecords(rpce)
+```
+
+##Electoral Dataset
+
+For our analysis, electoral data is taken into a long table format from its original wide table format in the University's website.
 
 ```{r}
 # conver to long format. year, party, chamber, seats
 congress_by_party1  <- congress_by_party %>% select(1:7)
  
-
- 
-
 names(congress_by_party1) <- c('Year',
                               paste(congress_by_party1[1,2], congress_by_party1[2,2]),
                               paste(congress_by_party1[1,3], congress_by_party1[2,3]),
@@ -68,75 +161,22 @@ congress_by_party2$Year <-congress_by_party2$Year+1
 congress <- rbind(congress_by_party1, congress_by_party2)
 ```
 
-###Final Dataset 1
+###Final Electoral Dataset
 
 ```{r}
-congress_by_party %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
+colnames(congress_by_party)<-c("Year","Senate_Dem","Senate_Rep","Senate_Oth","House Dem","House Rep","House Oth","State Legislatures Dem","State Legislatures Rep","State Legislatures Split+NE")
+congress_by_party<-congress_by_party[-3,]
+congress_by_party %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
 ```
 
 **Adding dataset to Mongo database**
 
 ```{r}
-InsertRecords<- function(data) {
-  data607_final_project <- mongo( db = "DATA607", collection = "DATA607_Final_Project")
-  x <-data607_final_project$insert(data)
-  rm(data607_final_project)
-  gc()
-  x
-}
-
 InsertRecords(congress_by_party)
 ```
 
-##Second Dataset
+#Visualize
 
-```{r}
-api.key = "4844eb6986119824760163e60bddd945"
-fred<-FredR(api.key)
-```
-
-
-```{r}
-gdp.series <- fred$series.search("GDP")
-
-#Gross domestic product
-gdp <- fred$series.observations(series_id = 'GDPC1')
-#Data is quarterly, needs to be scaled up to anually
-
-#Real Personal Consumption Expenditures
-rpce <- fred$series.observations(series_id = 'DPCERL1Q225SBEA')
-#Data is quarterly, needs to be scaled up to anually
-
-```
-
-```{r}
-#Scale up data from quarterly to annual
-gdp$date<-substring(gdp$date,1,4)
-gdp$value<-as.numeric(gdp$value)
-gdp$value<-gdp$value/4
-gdp<-gdp %>% group_by(date) %>% summarise(value=sum(value))
-
-rpce$date<-substring(rpce$date,1,4)
-rpce$value<-as.numeric(rpce$value)
-rpce$value<-rpce$value/4
-rpce<-rpce %>% group_by(date) %>% summarise(value=sum(value))
-```
-
-###Final Dataset 2
-
-```{r}
-gdp %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
-rpce %>% kable() %>% kable_styling() %>% scroll_box(width = "910px",height = "400px")
-```
-
-**Adding dataset to Mongo database**
-
-```{r}
-InsertRecords(gdp)
-InsertRecords(rpce)
-```
-
-####Trends
 ```{r}
 gdp1<-rpce
 gdp1$date <- as.numeric(rpce$date) 
@@ -168,6 +208,27 @@ congressz <- congress %>% mutate(Congress = ifelse(congress$House == congress$Se
 ggplot(gdp3, aes(x=date, y=value,  color=Congress , shape =  Congress )) +
   geom_point()
 ```
+
+
+```{r}
+plot(gdp,congress_by_party$Senate_Rep)
+```
+
+#Model
+
+##Economic Indicator Predictor
+
+###GDP Model
+
+###RPCE Model
+
+##Economy Health Classifier
+
+###Classifier in R
+
+###Classifier in Python
+
+#Communicate
 
 
 
