@@ -94,12 +94,14 @@ Since our analysis will be annual based, as senate and congress seats change bia
 ```{r}
 #Scale up data from quarterly to annual
 gdp$date<-substring(gdp$date,1,4)
+gdp$date<-as.numeric(gdp$date)
 gdp$value<-as.numeric(gdp$value)
 gdp$value<-gdp$value/4
 gdp<-gdp %>% group_by(date) %>% summarise(value=sum(value))
 gdp <- gdp %>% mutate(Diff = (value - lag(value))/lag(value)) # we add a column for the GDP difference between each year
 
 rpce$date<-substring(rpce$date,1,4)
+rpce$date<-as.numeric(rpce$date)
 rpce$value<-as.numeric(rpce$value)
 rpce$value<-rpce$value/4
 rpce<-rpce %>% group_by(date) %>% summarise(value=sum(value))
@@ -135,7 +137,7 @@ For our analysis, electoral data is taken into a long table format from its orig
 # conver to long format. year, party, chamber, seats
 congress_by_party  <- congress_by_party %>% select(1:7)
  
-names(congress_by_party) <- c('Year',
+names(congress_by_party) <- c('date',
                               paste(congress_by_party[1,2], congress_by_party[2,2]),
                               paste(congress_by_party[1,3], congress_by_party[2,3]),
                               paste(congress_by_party[1,4], congress_by_party[2,4]),
@@ -149,25 +151,24 @@ congress_by_party <- congress_by_party %>%
 congress_by_party <- congress_by_party %>%
                     mutate(House =ifelse(congress_by_party$`House Dem` > congress_by_party$`House Rep`, "Dem", ifelse(congress_by_party$`House Dem` == congress_by_party$`House Rep`, 'Hung','Rep')))
 
-congress_by_party<- congress_by_party %>%
-                     select(Year, House, Senate)
-congress_by_party<- congress_by_party[c(3:22),] %>% arrange(desc(Year))
+congress_by_party<- congress_by_party[c(3:22),] %>% arrange(desc(date))
 
-congress_by_party$Year <- as.numeric(congress_by_party$Year)
+congress_by_party$date <- as.numeric(congress_by_party$date)
  
-# Fill int the data for the year between elections
+#Fill int the data for the year between elections
 congress_by_party_between_years <- congress_by_party
 
-congress_by_party_between_years$Year <-congress_by_party_between_years$Year+1
+congress_by_party_between_years$date <-congress_by_party_between_years$date+1
 
 congress <- rbind(congress_by_party, congress_by_party_between_years)
+
+congress<- congress %>% arrange(desc(date))
 ```
 
 ###Final Electoral Dataset
 
 ```{r}
- 
-congress %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
+ congress %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
 ```
 
 **Adding dataset to Mongo database**
@@ -209,7 +210,7 @@ gdp_congress$date <- as.numeric(gdp_congress$date)
 gdp_congress$Diff <- as.double(gdp_congress$Diff)
 
  
-gdp_congress <- gdp_congress%>%inner_join(congress,by =c('date'='Year') )
+gdp_congress <- gdp_congress%>%inner_join(congress)
  
 ggplot(gdp_congress, aes(x=date, y=Diff, shape=House, color=House)) +
   geom_point()
@@ -222,12 +223,17 @@ ggplot(gdp_congress, aes(x=date, y=Diff, shape=Senate, color=Senate)) +
 **RPCE Data*
 
 ```{r}
+plot(rpce$date,rpce$value)
+```
+
+
+```{r}
 rpce_congress<-rpce
 rpce_congress$date <- as.numeric(rpce_congress$date) 
 rpce_congress$value <- as.double(rpce_congress$value)
 
  
-rpce_congress <- rpce_congress%>%inner_join(congress,by =c('date'='Year') )
+rpce_congress <- rpce_congress%>%inner_join(congress)
  
 ggplot(rpce_congress, aes(x=date, y=value, shape=House, color=House)) +
   geom_point()
@@ -278,6 +284,30 @@ gdp_congress_senate_rep_house_dem<-subset(gdp_congress,rpce_congress$Senate=="Re
 mean(gdp_congress_senate_rep_house_dem$Diff)
 ```
 
+**GDP Diff predicted by number of Democratic Party seats in congress**
+
+To derive this model we build a linear regression of GDP Diff agaisnt the number of Democratic seats in each chamber.
+
+**House**
+
+```{r}
+congress_gdp<-inner_join(congress,gdp)
+congress_gdp$`House Dem`<-as.numeric(congress_gdp$`House Dem`)
+gdp_house_model<-lm(Diff ~ `House Dem`,data = congress_gdp)
+plot(congress_gdp$`House Dem`,congress_gdp$Diff)
+abline(gdp_house_model)
+summary(gdp_house_model)
+```
+
+**Senate**
+
+```{r}
+congress_gdp$`Senate Dem`<-as.numeric(congress_gdp$`Senate Dem`)
+gdp_senate_model<-lm(Diff ~ `Senate Dem`,data = congress_gdp)
+plot(congress_gdp$`Senate Dem`,congress_gdp$Diff)
+abline(gdp_senate_model)
+summary(gdp_senate_model)
+```
 
 ###RPCE Models
 
@@ -318,14 +348,29 @@ mean(rpce_congress_senate_rep_house_dem$value)
 ```
 
 
-**RPCE prediced by number of Democratic Party seats in congress**
+**RPCE preditced by number of Democratic Party seats in congress**
 
 To derive this model we build a linear regression of RPCE agaisnt the number of Democratic seats in each chamber.
 
 **House**
 
 ```{r}
+congress_rpce<-inner_join(congress,rpce)
+congress_rpce$`House Dem`<-as.numeric(congress_rpce$`House Dem`)
+rpce_house_model<-lm(value ~ `House Dem`,data = congress_rpce)
+plot(congress_rpce$`House Dem`,congress_rpce$value)
+abline(rpce_house_model)
+summary(rpce_house_model)
+```
 
+**Senate**
+
+```{r}
+congress_rpce$`Senate Dem`<-as.numeric(congress_rpce$`Senate Dem`)
+rpce_senate_model<-lm(value ~ `Senate Dem`,data = congress_rpce)
+plot(congress_rpce$`Senate Dem`,congress_rpce$value)
+abline(rpce_senate_model)
+summary(rpce_senate_model)
 ```
 
 
