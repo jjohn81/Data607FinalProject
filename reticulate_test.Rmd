@@ -16,14 +16,17 @@ install.packages("reticulate")
 ```{r}
 library(reticulate)
 py_discover_config()
-print('--------')
-py_config()
 ```
 
 ```{r}
 conda_list()
 use_condaenv("python2")
 ```
+
+```{r}
+py_config()
+```
+
 
 ```{r}
 conda_install("python2", "pandas")
@@ -81,6 +84,31 @@ print("Mean squared error: %.2f"
 
 ```
 
+```{r}
+
+ar<-'Peter in R'
+```
+
+
+```{python}
+ap='Peter in py'
+```
+
+```{r}
+library(reticulate)
+```
+
+
+```{python}
+import numpy as np
+X=np.array([[1],[2],[3],[4],[5]])
+```
+
+```{python}
+print(X)
+```
+
+
 
 ```{python}
 import numpy as np
@@ -89,14 +117,22 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 X=np.array([[1],[2],[3],[4],[5]])
 print(X)
-y=np.array([[1],[2],[3],[4],[5]])
+y=np.array([[1],[3],[3],[4],[5]])
 print(y)
 
 regr = linear_model.LinearRegression()
 regr.fit(X,y)
 
+y_p = regr.predict(X)
+print(y_p)
+
 print('Coefficients: \n', regr.coef_)
 print('Intercept: \n', regr.intercept_)
-print("Mean squared error: %.2f"% mean_squared_error(diabetes_y_test, diabetes_y_pred))
+print("Mean squared error: %.2f"% mean_squared_error(y, y_p))
+```
+
+
+```{r}
+py$X
 ```
 
