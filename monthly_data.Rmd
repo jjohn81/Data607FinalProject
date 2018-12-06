@@ -140,18 +140,34 @@ health_congress<-inner_join(pay,monthy_congress) %>% select(6:13) %>% subset(sel
 
 The resulting dataset from these transformations has the classifier's 6 input features, and the three level economy healt output. 
 
-With our data ready we can now select a scikit-learn classifier to use. 
+With our data ready we can now select a scikit-learn classifier to use. We will use the MLPClassifier in Scikit-Learn, which implements a neural network classifier. We build the required input for the trassifier by transforming the data in our table. The classifier requires a X matrix with samplesxfeatures, and a y vector with samples.
 
 ```{r}
 library(reticulate)
+
+X<-subset(health_congress,select = -Health)
+
+y<-health_congress$Health
+y <- ifelse(y == "Bad", 0, y)
+y <- ifelse(y == "Medium", 1, y)
+y <- ifelse(y == "Good", 2, y)
 ```
 
 ```{python}
 import numpy as np
 from sklearn.neural_network import MLPClassifier
 
+X=r.X
+y=r.y
+
+print(X)
+print(y)
+
 X = [[0., 0.], [1., 2.], [3., 1.], [1., 4.], [2., 1.], [0., 1.]]
 y = [0, 1, 3,4,2,7]
+
+print(X)
+print(y)
 
 clf = MLPClassifier(solver='lbfgs', alpha=1e-5,hidden_layer_sizes=(5, 2), random_state=1)
 clf.fit(X, y)
