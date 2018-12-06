@@ -248,7 +248,7 @@ ggplot(rpce_congress, aes(x=date, y=value, shape=Senate, color=Senate)) +
 
 ##Economic Indicator Predictor
 
-###GDP Model
+###GDP Models
 
 A simple model can determine the expected GDP normilized difference year on year value for a year where the Democratic or Republican party is majority in each chamber.
 
@@ -373,6 +373,87 @@ abline(rpce_senate_model)
 summary(rpce_senate_model)
 ```
 
+##Modeling Using Python
+
+We experiment with using Python libraries within R. To do this we use the reticulate library. The library was first installed using the command:
+
+install.packages("reticulate")
+
+The library was then loaded and the environment on top of which it runs explored. An install of Python was already available in the system, as wells as some Anaconda or conda environments.
+
+```{r}
+library(reticulate)
+py_discover_config()
+```
+
+The Python library of interest is Scikit-Learn. This library has a regression model which will be used to recreate what was done in R in the previous section to prove Python libraries can be used in RStudio. This library is installed on the environment being used by reticulate using these commands:
+
+conda_install("r-reticulate", "scikit-learn") 
+
+Other libraries were also installed:
+
+conda_install("r-reticulate", "numpy") 
+conda_install("r-reticulate", "pandas")
+
+We then load the libraries
+
+```{python}
+import numpy as np
+from sklearn import datasets, linear_model
+from sklearn.metrics import mean_squared_error, r2_score
+```
+
+As a simple experiment we will use the linear regression functionality in Scikit-Learn to build a model to try to predict the rpce from the number of Democratic seta in the House.
+
+
+First we look at how we move data from R to Python. We first move the data we will use in the regression to specific variables, and then see those variables in Python using the suffix r.
+```{r}
+#R chunk
+rpce_house_model<-lm(value ~ `House Dem`,data = congress_rpce)
+y<-congress_rpce$value
+X<-congress_rpce$'House Dem'
+```
+
+We can now see the R data in a Python chunk
+
+```{python}
+#Python chunk
+X=np.array(r.X)
+X=np.array(X)[np.newaxis]
+X=X.T
+y=np.array(r.y)
+y=np.array(y)[np.newaxis]
+y=y.T
+```
+
+We can now use this data in scikit-learn and build a linear regression model
+
+```{python}
+#Python chunk
+regr = linear_model.LinearRegression()
+regr.fit(X,y)
+y_p = regr.predict(X)
+coef=regr.coef_
+inter=regr.intercept_
+error=mean_squared_error(y, y_p)
+print('Coefficients: \n', coef)
+print('Intercept: \n', inter)
+print("Mean squared error: %.2f"% error)
+```
+
+Results from our regression are also available in R
+
+```{r}
+#R Chunk
+py$coef
+py$inter
+py$error
+
+plot(X,y)
+abline(py$inter,py$coef)
+title("Python regression plot")
+```
+
 
 ##Economy Health Classifier
 
@@ -392,4 +473,11 @@ Since the House will be lead by the Democratic party we expect GDP normilized di
 
 Since the House will be lead by the Democratic party we expect RPCE to be around 2.62625. But since the Senate will be leading the Senate, RPCE should come at 3.49375. Since we are looking at a divided congress, expected RPCE is that for a Senate controlled by Republicans and House by Democrats, which is **3.266667**
 
+**Regression Models**
+
+An attempt was made to build a model which would predict two economic indicators from the number of seats in the House or Senate a particular party holds. This exercise proved fruitless as a statistically linear model was not possible with the data at hand.
+
+**Modeling in Python**
+
+Using the R Reticulate library, we are able to use Python packages in RStudio to produce models using data available in R
 
