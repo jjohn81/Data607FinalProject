@@ -15,11 +15,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #Introduction
 
-Every two years our nation goes thru the process of electing out government officials. It seems every year the bipartisan rhetoric gets stronger and strong. Many claims are made on what happens to the economy when either party is in control, of the President’s office, the Senate or the House. Coming right out of the mid-terms, looking at what next year brings economically is certainly of interest to all.
+Every two years our nation goes thru the process of electing out government officials. It seems every year the bipartisan rhetoric gets stronger and strong. Many claims are made on what happens to the economy when either party is in control, of the President's office, the Senate or the House. Coming right out of the mid-terms, looking at what next year brings economically is certainly of interest to all.
 
-Gathering data from the Federal Reserve’s FRED service ( https://fred.stlouisfed.org ) and from scrapping results from elections from the web (such as https://transition.fec.gov/pubrec/electionresults.shtm), we can build a model of what next year has in store. 
+Gathering data from the Federal Reserve's FRED service ( https://fred.stlouisfed.org ) and from scrapping results from elections from the web (such as https://transition.fec.gov/pubrec/electionresults.shtm), we can build a model of what next year has in store. 
 
-We would start out by selecting economic indicators from the FRED site. Selecting interesting indicators will be done using  Wickham’s  workflow. Data will be imported, made tidy, possible transformations applied and then thru visualization the most “interesting” indicators will be selected.
+We would start out by selecting economic indicators from the FRED site. Selecting interesting indicators will be done using  Wickham's  workflow. Data will be imported, made tidy, possible transformations applied and then thru visualization the most "interesting" indicators will be selected.
 
  Electoral data will include the number of senate and house seats in congress the year after an election. Using this data together with our economic indicators, models will be built to predict a certain economic indicator. Several models can be used, presenting results from each in graphical form. We can also classify monthly economic data with a good, medium and poor economy tag. Once we do this we can train a classifier to tell us what the economic outlook might be given an input of congress seats.
 
@@ -117,16 +117,16 @@ rpce %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
 **Adding dataset to Mongo database**
 
 ```{r}
-InsertRecords<- function(data) {
-  data607_final_project <- mongo( db = "DATA607", collection = "DATA607_Final_Project")
+InsertRecords<- function(data, collectionName) {
+  data607_final_project <- mongo( db = "DATA607", collection = collectionName)
   x <-data607_final_project$insert(data)
   rm(data607_final_project)
   gc()
   x
 }
 
-InsertRecords(gdp)
-InsertRecords(rpce)
+InsertRecords(gdp, 'gdp')
+InsertRecords(rpce, 'rpce')
 ```
 
 ##Electoral Dataset
@@ -174,17 +174,23 @@ congress<- congress %>% arrange(desc(date))
 **Adding dataset to Mongo database**
 
 ```{r}
-InsertRecords(congress)
+InsertRecords(congress, 'congress')
 ```
 
 **Read data from Mongo**
 
 ```{r}
-# I will add logic to retrieve data from mongo. This way we are using two data sources. I will read gdp and rpce
-# data back and store them in the same variable. I will alos try to do the join in mongo
+ 
+mongoCongress <- mongo( db = "DATA607", collection = "congress")
+congress <- mongoCongress$find('{}')
 
-# mongoCongress <- mongo( db = "DATA607", collection = "DATA607_Final_Project")
-#congress <- mongoCongress$find('{}')
+mongoGdp <- mongo( db = "DATA607", collection = "gdp")
+gdp <- mongoGdp$find('{}')
+
+
+mongoRcpe <- mongo( db = "DATA607", collection = "rpce")
+rpce <- mongoRcpe$find('{}')
+
 ```
 
 
