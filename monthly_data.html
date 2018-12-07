@@ -408,24 +408,26 @@ from sklearn.neural_network import MLPClassifier
 X=np.array(r.X)
 #y=np.array(r.y)
 X=X.astype(np.float)
+#print(X.size)
 #y=y.astype(np.float)
-X=[list(map(int,r.X[1])),list(map(int,r.X[2]))]
+#X=[list(map(int,r.X[1])),list(map(int,r.X[2]))]
 y=list(map(int,r.y))
-y=[y[1],y[2]]
-print(X)</code></pre>
-<pre><code>## [[58, 41, 1, 277, 158, 0], [58, 41, 1, 277, 158, 0]]</code></pre>
-<pre class="python"><code>print(y)
+#y=[y[1],y[2]]
+#print(X)
+#print(y)
 #X = [[0., 0.], [1., 2.], [3., 1.], [1., 4.], [2., 1.], [0., 1.]]
-#y = [0, 1, 3,4,2,7]</code></pre>
-<pre><code>## [1, 1]</code></pre>
-<pre class="python"><code>print(X)</code></pre>
-<pre><code>## [[58, 41, 1, 277, 158, 0], [58, 41, 1, 277, 158, 0]]</code></pre>
-<pre class="python"><code>print(y)</code></pre>
-<pre><code>## [1, 1]</code></pre>
-<pre class="python"><code>clf = MLPClassifier(solver='lbfgs', alpha=1e-5,hidden_layer_sizes=(5, 2), random_state=1)
+#y = [0, 1, 3,4,2,7]
+#print(X)
+#print(y)
+clf = MLPClassifier(solver='lbfgs', alpha=1e-5,hidden_layer_sizes=(5, 2), random_state=1)
 clf.fit(X, y)
-print(clf.predict([[58, 41, 1, 277, 158, 0], [58, 41, 1, 277, 158, 0]]))</code></pre>
-<pre><code>## [1 1]</code></pre>
+res=clf.predict([[47, 51, 2, 197, 236, 0], [93, 5, 2, 135, 100, 0]])</code></pre>
+<pre class="r"><code>res&lt;-py$res
+res &lt;- ifelse(res == 0,&quot;Bad&quot;, res)
+res &lt;- ifelse(res == 1,&quot;Medium&quot;, res)
+res &lt;- ifelse(res == 2,&quot;Good&quot;, res)
+res</code></pre>
+<pre><code>## [1] &quot;Medium&quot; &quot;Medium&quot;</code></pre>
 </div>
 
 
