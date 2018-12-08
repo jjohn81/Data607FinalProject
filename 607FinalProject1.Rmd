@@ -31,7 +31,7 @@ We will use Hadley Wickman's Tidy Workflow as show below.
 
 ![](TidyWorkflow.png)
 
-###Loading required libraries
+**Loading required libraries**
 
 ```{r}
 library("rvest")
@@ -43,6 +43,9 @@ library(ggplot2)
 library(FredR)
 library(pipeR)
 library(kableExtra)
+
+library(reticulate)
+library(reshape2)
 ```
 
 #Import Data
@@ -463,11 +466,131 @@ title("Python regression plot")
 
 ##Economy Health Classifier
 
-###Classifier in R
+For our Economy Health Classifier we start by procuring a monthly economy indicator from the FRED site. 
 
-###Classifier in Python
+```{r}
+api.key = "4844eb6986119824760163e60bddd945"
+fred<-FredR(api.key)
+
+gdp.series <- fred$series.search("GDP")
+#gdp.series
+```
+
+We select the current indicator: All Employees: Total Nonfarm Payrolls. After importing it and visualizing it we find it constantly increases with time. This is expected as the number of people employed should increase together with the active population of the nation. 
+
+```{r}
+pay <- fred$series.observations(series_id = 'PAYEMS')
+head(pay,n=100) %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
+plot(format(as.Date(pay$date,format="%Y-%m-%d"),"%Y"),pay$value)
+```
+
+To use the data for our classifier we calculate the month-on-month indicator change and we normalize against the first reading. Similar to our GDP calculation before.
+
+```{r}
+pay$value<-as.numeric(pay$value)
+pay <- pay %>% mutate(Diff = (value - lag(value))/lag(value))
+plot(format(as.Date(pay$date,format="%Y-%m-%d"),"%Y"),pay$Diff)
+```
+
+Visual inspection of the data reveals how payrolls made wide positive and negative swings during the 40's and 50's. After 1960 the data shows much clearer with possible patterns emerging. Our analysis will concentrate on data starting from 1978, which is the period for which we have congress party composition data.
+
+To build our classifier we need to establish thresholds for good, medium and poor economy. The idea is that high employment growth represents a good economy, and low employment growth is a bad economy. We look at a summary of our data to determine what would be good thresholds to use.
+
+```{r}
+pay<-na.omit(pay)
+summary(pay$Diff)
+```
+
+We classify our data as:
+  - Poor economy: payroll growth below 1st quartile
+  - Medium economy: payroll growth between 1st and 3rd quartile
+  - Good economy: payroll growth above 3rd quartile
+
+```{r}
+poor<-summary(pay$Diff)[2]
+good<-summary(pay$Diff)[5]
+pay$Health <- ifelse(pay$Diff < poor, "Bad", "Medium")
+pay$Health <- ifelse(pay$Diff > good, "Good", pay$Health)
+```
+
+Now that we have our output classification ready, our classifier will use as input features the number of congressional seats in Congress per party for both chambers. We build a table with our classification and the six input features (Democratic, Republican and Other number of seats for both the House and Senate).
+
+Do be able to join the payroll with the congressional dataset, we need to first fill in monthly rows in the congressional table.
+
+```{r}
+monthy_congress<-congress %>% slice(rep(1:n(), each = 12))
+colnames(monthy_congress)[1]<-"Year"
+pay$Year<-substring(pay$date,1,4)
+pay$Year<-as.numeric(pay$Year)
+health_congress<-inner_join(pay,monthy_congress) %>% select(6:13) %>% subset(select=-Year)
+```
+
+The resulting dataset from these transformations has the classifier's 6 input features, and the three level economy healt output. 
+
+With our data ready we can now select a scikit-learn classifier to use. We will use the MLPClassifier in Scikit-Learn, which implements a neural network classifier. We build the required input for the trassifier by transforming the data in our table. The classifier requires a X matrix with samplesxfeatures, and a y vector with samples.
+
+```{r}
+library(reticulate)
+
+X<-subset(health_congress,select = -Health)
+X<-data.matrix(X)
+
+y<-health_congress$Health
+y <- ifelse(y == "Bad", 0, y)
+y <- ifelse(y == "Medium", 1, y)
+y <- ifelse(y == "Good", 2, y)
+```
+
+```{python}
+import numpy as np
+from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+
+X=np.array(r.X)
+X=X.astype(np.float)
+y=list(map(int,r.y))
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
+
+clf = MLPClassifier(solver='lbfgs', alpha=1e-5,hidden_layer_sizes=(415, 218), random_state=1)
+clf.fit(X_train, y_train)
+
+y_pred = clf.predict(X_test)
+cnf_matrix = confusion_matrix(y_test, y_pred)
+print(cnf_matrix)
+
+res=clf.predict([[47, 51, 2, 197, 236, 0], [45, 53, 2, 235, 199, 0]])
+```
+
+```{r}
+
+py$cnf_matrix
+
+cnf_matrix<-as.data.frame(as.table(py$cnf_matrix))
+colnames(cnf_matrix)<-c("Real","Prediction","Count")
+cnf_matrix
+
+library(reshape2)
+melted_matrix <- melt(py$cnf_matrix)
+library(ggplot2)
+ggplot(data = melted_matrix, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() + labs(x = "Real", y = "Predicted")
+```
+
+
+```{r}
+res<-py$res
+res <- ifelse(res == 0,"Bad", res)
+res <- ifelse(res == 1,"Medium", res)
+res <- ifelse(res == 2,"Good", res)
+res
+```
 
 #Communicate
+
+##Data Science
 
 Based on the analysis here presented, this is what we can expect as an economic outlook for next year.
 
@@ -483,7 +606,17 @@ Since the House will be lead by the Democratic party we expect RPCE to be around
 
 An attempt was made to build a model which would predict two economic indicators from the number of seats in the House or Senate a particular party holds. This exercise proved fruitless as a statistically linear model was not possible with the data at hand.
 
+**Classifier**
+
+Using a neural network classifier we predict that the change in composition of the US Congress from 2018 to 2019 does not indicate a change in the state of the country's economy. But the classifier derived from the analysis shows lack of performance against a test set. This classifier should be revised and upgraded.
+
+##Data Engineering
+
 **Modeling in Python**
 
-Using the R Reticulate library, we are able to use Python packages in RStudio to produce models using data available in R
+Using the R Reticulate library, we are able to use Python packages in RStudio to produce models using data available in R.
+
+A Python classifier taken from the popular library Scikit-Learn can be called from within R, trained, and results sent back to R for presentation or further analysis.
+
+At least one Python library, matplotlib, presented issues when running from R using the Reticulate library.
 
