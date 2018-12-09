@@ -74,7 +74,7 @@ rpce <- fred$series.observations(series_id = 'DPCERL1Q225SBEA')
 head(rpce,n=100) %>% kable() %>% kable_styling() %>% scroll_box(height = "400px")
 ```
 
-##Electoral Data
+##Electoral Dataset
 
 For this analysis we will need data showing the number of congress and senate seats occupied by both parties. This data was scrapped from The University of Wisconsin's web page. 
 
